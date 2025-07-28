@@ -1,150 +1,151 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Apartment Booking Calendar</title>
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet">
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      margin: 0;
-      background: #f5f5f5;
-    }
-    header {
-      background: #007aff;
-      color: white;
-      padding: 14px;
-      font-size: 18px;
-      text-align: center;
-    }
-    #calendar {
-      max-width: 95%;
-      margin: 20px auto;
-      background: white;
-      padding: 10px;
-      border-radius: 10px;
-    }
-    #submit {
-      display: block;
-      width: 90%;
-      margin: 20px auto;
-      padding: 14px;
-      font-size: 18px;
-      background: #007aff;
-      color: white;
-      border: none;
-      border-radius: 8px;
-    }
-    #submit:disabled {
-      background: #aaa;
-    }
-  </style>
-</head>
-<body>
-  <header>Booking Calendar: <span id="aid">...</span></header>
-  <div id="calendar"></div>
-  <button id="submit" disabled>Submit Booking</button>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Apartment Booking</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        text-align: center;
+        padding: 20px;
+      }
 
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
-  <script>
-    const DEPLOY_ID = "AKfycbwM72sTLcRVl_koHp_B1tm90wGgQR8ZMuhlteCpQ3JFDn3SQETh3d78js40xICSIWuE";
-    const BASE = `https://script.google.com/macros/s/${DEPLOY_ID}/exec`;
+      .calendar {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 5px;
+        margin-top: 20px;
+      }
 
-    const params = new URLSearchParams(window.location.search);
-    const a_id = params.get("a_id");
-    document.getElementById("aid").textContent = a_id || "Missing a_id";
+      .day {
+        padding: 10px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        border-radius: 6px;
+      }
 
-    const selected = new Set();
-    const booked = new Set();
-    const submitBtn = document.getElementById("submit");
+      .booked {
+        background-color: #f44336;
+        color: white;
+        pointer-events: none;
+      }
 
-    if (!a_id) {
-      document.getElementById("calendar").innerHTML = "<p style='padding:20px; text-align:center;'>Missing a_id in URL</p>";
-    } else {
-      fetchBookings();
-    }
+      .available {
+        background-color: #4caf50;
+        color: white;
+      }
 
-    async function fetchBookings() {
-      try {
-        const res = await fetch(`${BASE}?a_id=${a_id}&action=getBookings`);
+      .selected {
+        background-color: #2196f3 !important;
+        color: white;
+      }
+
+      button {
+        margin-top: 20px;
+        padding: 10px 20px;
+        font-size: 16px;
+        border: none;
+        background-color: #333;
+        color: white;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Apartment Booking Calendar</h2>
+    <div id="calendarContainer"></div>
+    <button onclick="submitBooking()">Submit Booking</button>
+
+    <script>
+      const a_id = new URLSearchParams(window.location.search).get("a_id");
+      const DEPLOY_ID = "AKfycbwM72sTLcRVl_koHp_B1tm90wGgQR8ZMuhlteCpQ3JFDn3SQETh3d78js40xICSIWuE";
+      const BASE = `https://script.google.com/macros/s/${DEPLOY_ID}/exec`;
+
+      let bookedDates = [];
+      let selectedDates = [];
+
+      async function fetchBookings() {
+        const url = `${BASE}?a_id=${a_id}&action=getBookings`;
+        const res = await fetch(url);
         const data = await res.json();
-        data.forEach(ev => {
-          let d = new Date(ev.start), end = new Date(ev.end);
-          while (d < end) {
-            booked.add(d.toISOString().split("T")[0]);
-            d.setDate(d.getDate() + 1);
-          }
-        });
-        initCalendar();
-      } catch (err) {
-        document.getElementById("calendar").innerHTML = "<p style='padding:20px; color:red;'>Error loading bookings</p>";
-        console.error(err);
+        bookedDates = data.map(ev => ev.start.split("T")[0]);
+        renderCalendar();
       }
-    }
 
-    function initCalendar() {
-      const calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-        initialView: "dayGridMonth",
-        selectable: true,
-        headerToolbar: {
-          left: "prev,next today",
-          center: "title",
-          right: ""
-        },
-        select: (info) => {
-          const date = info.startStr;
-          if (booked.has(date)) return;
+      function renderCalendar(monthOffset = 0) {
+        const container = document.getElementById("calendarContainer");
+        container.innerHTML = "";
 
-          if (selected.has(date)) {
-            selected.delete(date);
+        const today = new Date();
+        today.setMonth(today.getMonth() + monthOffset);
+        const year = today.getFullYear();
+        const month = today.getMonth();
+
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+
+        const calendar = document.createElement("div");
+        calendar.className = "calendar";
+
+        const daysInMonth = lastDay.getDate();
+        const startDay = firstDay.getDay();
+
+        for (let i = 0; i < startDay; i++) {
+          const empty = document.createElement("div");
+          calendar.appendChild(empty);
+        }
+
+        for (let i = 1; i <= daysInMonth; i++) {
+          const date = new Date(year, month, i);
+          const dateStr = date.toISOString().split("T")[0];
+
+          const cell = document.createElement("div");
+          cell.className = "day";
+          cell.textContent = i;
+
+          if (bookedDates.includes(dateStr)) {
+            cell.classList.add("booked");
           } else {
-            selected.add(date);
+            cell.classList.add("available");
+            cell.onclick = () => toggleDate(dateStr, cell);
           }
-          calendar.refetchEvents();
-          submitBtn.disabled = selected.size === 0;
-        },
-        events: (fetchInfo, successCallback) => {
-          const events = [];
-          let d = new Date(fetchInfo.start), end = new Date(fetchInfo.end);
-          while (d <= end) {
-            const ds = d.toISOString().split("T")[0];
-            events.push({
-              start: ds,
-              display: 'background',
-              allDay: true,
-              color: booked.has(ds) ? '#ff4d4d' : selected.has(ds) ? '#007aff' : '#90ee90'
-            });
-            d.setDate(d.getDate() + 1);
-          }
-          successCallback(events);
-        }
-      });
-      calendar.render();
-      submitBtn.onclick = () => submitBooking();
-    }
 
-    async function submitBooking() {
-      if (!selected.size) return;
-      const dates = Array.from(selected);
-      try {
-        const res = await fetch(BASE, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ a_id, dates })
-        });
-        const result = await res.json();
-        if (result.status === "ok") {
-          alert("Booking successful!");
-          location.reload();
-        } else {
-          alert("Booking failed: " + result.message);
+          calendar.appendChild(cell);
         }
-      } catch (e) {
-        alert("Error submitting booking.");
-        console.error(e);
+
+        container.appendChild(calendar);
       }
-    }
-  </script>
-</body>
+
+      function toggleDate(dateStr, element) {
+        if (selectedDates.includes(dateStr)) {
+          selectedDates = selectedDates.filter(d => d !== dateStr);
+          element.classList.remove("selected");
+        } else {
+          selectedDates.push(dateStr);
+          element.classList.add("selected");
+        }
+      }
+
+      async function submitBooking() {
+        if (selectedDates.length === 0) {
+          alert("Please select at least one date.");
+          return;
+        }
+
+        const start = selectedDates[0];
+        const end = selectedDates[selectedDates.length - 1];
+
+        const url = `${BASE}?a_id=${a_id}&action=addBooking&start=${start}&end=${end}`;
+        const res = await fetch(url);
+        const result = await res.text();
+
+        alert(result || "Booking submitted!");
+        selectedDates = [];
+        fetchBookings(); // Reload calendar
+      }
+
+      fetchBookings();
+    </script>
+  </body>
 </html>
