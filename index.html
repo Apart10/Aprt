@@ -3,78 +3,147 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Apartment Availability</title>
+  <title>Apartment Booking Calendar</title>
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet">
   <style>
     body {
-      font-family: system-ui, sans-serif;
-      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       margin: 0;
-      background: #f9f9f9;
-      color: #333;
+      background: #f5f5f5;
     }
-
-    h1 {
-      font-size: 1.5rem;
+    header {
+      background: #007aff;
+      color: white;
+      padding: 14px;
+      font-size: 18px;
+      text-align: center;
     }
-
-    #result {
-      margin-top: 20px;
+    #calendar {
+      max-width: 95%;
+      margin: 20px auto;
+      background: white;
+      padding: 10px;
+      border-radius: 10px;
     }
-
-    ul {
-      padding-left: 20px;
+    #submit {
+      display: block;
+      width: 90%;
+      margin: 20px auto;
+      padding: 14px;
+      font-size: 18px;
+      background: #007aff;
+      color: white;
+      border: none;
+      border-radius: 8px;
     }
-
-    li {
-      margin-bottom: 10px;
-    }
-
-    .error {
-      color: red;
-      font-weight: bold;
+    #submit:disabled {
+      background: #aaa;
     }
   </style>
 </head>
 <body>
-  <h1>Apartment Availability</h1>
-  <div id="result">Loading...</div>
+  <header>Booking Calendar: <span id="aid">...</span></header>
+  <div id="calendar"></div>
+  <button id="submit" disabled>Submit Booking</button>
 
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
   <script>
-    const a_id = new URLSearchParams(window.location.search).get("a_id");
+    const DEPLOY_ID = "AKfycbwM72sTLcRVl_koHp_B1tm90wGgQR8ZMuhlteCpQ3JFDn3SQETh3d78js40xICSIWuE";
+    const BASE = `https://script.google.com/macros/s/${DEPLOY_ID}/exec`;
+
+    const params = new URLSearchParams(window.location.search);
+    const a_id = params.get("a_id");
+    document.getElementById("aid").textContent = a_id || "Missing a_id";
+
+    const selected = new Set();
+    const booked = new Set();
+    const submitBtn = document.getElementById("submit");
 
     if (!a_id) {
-      document.getElementById("result").innerHTML =
-        "<div class='error'>❌ Missing <code>a_id</code> in URL</div>";
+      document.getElementById("calendar").innerHTML = "<p style='padding:20px; text-align:center;'>Missing a_id in URL</p>";
     } else {
-      const scriptURL = `https://script.google.com/macros/s/AKfycbwM72sTLcRVl_koHp_B1tm90wGgQR8ZMuhlteCpQ3JFDn3SQETh3d78js40xICSIWuE/exec?a_id=${a_id}`;
+      fetchBookings();
+    }
 
-      fetch(scriptURL)
-        .then((res) => {
-          if (!res.ok) throw new Error("Network error");
-          return res.json();
-        })
-        .then((bookings) => {
-          const result = document.getElementById("result");
-          if (!bookings.length) {
-            result.innerHTML = "✅ No bookings found. All dates available.";
-            return;
+    async function fetchBookings() {
+      try {
+        const res = await fetch(`${BASE}?a_id=${a_id}&action=getBookings`);
+        const data = await res.json();
+        data.forEach(ev => {
+          let d = new Date(ev.start), end = new Date(ev.end);
+          while (d < end) {
+            booked.add(d.toISOString().split("T")[0]);
+            d.setDate(d.getDate() + 1);
           }
-
-          const ul = document.createElement("ul");
-          bookings.forEach((b) => {
-            const li = document.createElement("li");
-            li.textContent = `${new Date(b.start).toDateString()} → ${new Date(b.end).toDateString()}`;
-            ul.appendChild(li);
-          });
-
-          result.innerHTML = `<strong>📅 Booked Dates for ${a_id}:</strong>`;
-          result.appendChild(ul);
-        })
-        .catch((err) => {
-          console.error(err);
-          document.getElementById("result").innerHTML =
-            "<div class='error'>❌ Error loading bookings. Please try again.</div>";
         });
+        initCalendar();
+      } catch (err) {
+        document.getElementById("calendar").innerHTML = "<p style='padding:20px; color:red;'>Error loading bookings</p>";
+        console.error(err);
+      }
+    }
+
+    function initCalendar() {
+      const calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
+        initialView: "dayGridMonth",
+        selectable: true,
+        headerToolbar: {
+          left: "prev,next today",
+          center: "title",
+          right: ""
+        },
+        select: (info) => {
+          const date = info.startStr;
+          if (booked.has(date)) return;
+
+          if (selected.has(date)) {
+            selected.delete(date);
+          } else {
+            selected.add(date);
+          }
+          calendar.refetchEvents();
+          submitBtn.disabled = selected.size === 0;
+        },
+        events: (fetchInfo, successCallback) => {
+          const events = [];
+          let d = new Date(fetchInfo.start), end = new Date(fetchInfo.end);
+          while (d <= end) {
+            const ds = d.toISOString().split("T")[0];
+            events.push({
+              start: ds,
+              display: 'background',
+              allDay: true,
+              color: booked.has(ds) ? '#ff4d4d' : selected.has(ds) ? '#007aff' : '#90ee90'
+            });
+            d.setDate(d.getDate() + 1);
+          }
+          successCallback(events);
+        }
+      });
+      calendar.render();
+      submitBtn.onclick = () => submitBooking();
+    }
+
+    async function submitBooking() {
+      if (!selected.size) return;
+      const dates = Array.from(selected);
+      try {
+        const res = await fetch(BASE, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ a_id, dates })
+        });
+        const result = await res.json();
+        if (result.status === "ok") {
+          alert("Booking successful!");
+          location.reload();
+        } else {
+          alert("Booking failed: " + result.message);
+        }
+      } catch (e) {
+        alert("Error submitting booking.");
+        console.error(e);
+      }
     }
   </script>
 </body>
