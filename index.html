@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Apartment Availability</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      padding: 20px;
+      margin: 0;
+      background: #f9f9f9;
+      color: #333;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    #result {
+      margin-top: 20px;
+    }
+
+    ul {
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 10px;
+    }
+
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Apartment Availability</h1>
+  <div id="result">Loading...</div>
+
+  <script>
+    const a_id = new URLSearchParams(window.location.search).get("a_id");
+
+    if (!a_id) {
+      document.getElementById("result").innerHTML =
+        "<div class='error'>❌ Missing <code>a_id</code> in URL</div>";
+    } else {
+      const scriptURL = `https://script.google.com/macros/s/AKfycbwM72sTLcRVl_koHp_B1tm90wGgQR8ZMuhlteCpQ3JFDn3SQETh3d78js40xICSIWuE/exec?a_id=${a_id}`;
+
+      fetch(scriptURL)
+        .then((res) => {
+          if (!res.ok) throw new Error("Network error");
+          return res.json();
+        })
+        .then((bookings) => {
+          const result = document.getElementById("result");
+          if (!bookings.length) {
+            result.innerHTML = "✅ No bookings found. All dates available.";
+            return;
+          }
+
+          const ul = document.createElement("ul");
+          bookings.forEach((b) => {
+            const li = document.createElement("li");
+            li.textContent = `${new Date(b.start).toDateString()} → ${new Date(b.end).toDateString()}`;
+            ul.appendChild(li);
+          });
+
+          result.innerHTML = `<strong>📅 Booked Dates for ${a_id}:</strong>`;
+          result.appendChild(ul);
+        })
+        .catch((err) => {
+          console.error(err);
+          document.getElementById("result").innerHTML =
+            "<div class='error'>❌ Error loading bookings. Please try again.</div>";
+        });
+    }
+  </script>
+</body>
+</html>
